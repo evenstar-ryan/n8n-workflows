@@ -1,0 +1,454 @@
+{
+  "name": "Get All Companies from Platforms and Compare Names/IDs",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1424,
+        -80
+      ],
+      "id": "3571e8d9-7cb2-4094-b591-55ab223b925e",
+      "name": "Start"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract the clients array from GraphQL response\nconst clients = $input.all()[0].json.data.getClientList.clients;\n\n// Transform to standard format with platform identifier\nreturn clients.map(client => ({\n  json: {\n    platform: 'SuperOps',\n    id: client.accountId,\n    name: client.name\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        -80
+      ],
+      "id": "daf533eb-cd5a-4b4a-94ec-34d3091a3444",
+      "name": "Extract SuperOps Clients"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract companies array from Hudu response\nconst companies = $input.all()[0].json.companies;\n\n// Transform to standard format\nreturn companies.map(company => ({\n  json: {\n    platform: 'Hudu',\n    id: company.id,\n    name: company.name\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        -288
+      ],
+      "id": "7695bc22-bdf2-49b1-ac0a-c9dc7e2f35a1",
+      "name": "Extract Hudu Companies"
+    },
+    {
+      "parameters": {
+        "url": "https://app.ninjarmm.com/v2/organizations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1104,
+        336
+      ],
+      "id": "d4dbf831-787e-44d0-be25-51ea546f928e",
+      "name": "NinjaOne - Get Organizations",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "RAjf5poWxZ466lE5",
+          "name": "NinjaOne API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://evenstar.huducloud.com/api/v1/companies?page_size=300",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1104,
+        -288
+      ],
+      "id": "a1ee9283-117b-4557-ac85-93ace5ab8fad",
+      "name": "Hudu - Get Companies",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o5FyDdc2nqruRrkR",
+          "name": "Hudu API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.superops.ai/msp",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpMultipleHeadersAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n     \"query\": \"{ getClientList(input: {}) { clients { accountId name } } }\"\n   }",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1104,
+        -80
+      ],
+      "id": "9191e23a-1fa3-4139-8123-963611bda743",
+      "name": "SuperOps - Get Clients",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "a3bMRBjO5LocOvSn",
+          "name": "SuperOps MSP API"
+        },
+        "httpMultipleHeadersAuth": {
+          "id": "RYdTfhQ1HuM69KDA",
+          "name": "SuperOps MSP API Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the raw input items\nconst items = $input.all();\n\n// Map through each item (NinjaOne returns multiple items, one per org)\nreturn items.map(item => ({\n  json: {\n    platform: 'NinjaOne',\n    id: item.json.id,\n    name: item.json.name\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        336
+      ],
+      "id": "782bb8b1-afa9-4e9a-aa17-0c35810f37f7",
+      "name": "Extract NinjaOne Orgs"
+    },
+    {
+      "parameters": {
+        "url": "https://api.huntress.io/v1/organizations?limit=500",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1104,
+        128
+      ],
+      "id": "20d666c1-a9a9-45b5-be7c-f54c66a3ebf9",
+      "name": "Huntress - Get Organizations",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "5TmbpXZrc0jlE6GZ",
+          "name": "Huntress API (Account-wide)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Huntress wraps in an organizations array\nconst orgs = $input.all()[0].json.organizations;\n\n// Transform to standard format\nreturn orgs.map(org => ({\n  json: {\n    platform: 'Huntress',\n    id: org.id,\n    name: org.name\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        128
+      ],
+      "id": "7e14e0f4-1317-43e2-a067-e63d2006b7b1",
+      "name": "Extract Huntress Orgs"
+    },
+    {
+      "parameters": {
+        "url": "https://api.dnsfilter.com/v1/organizations/all",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1104,
+        -496
+      ],
+      "id": "7a9a5e2b-e829-48b0-8a2e-a7901f55aecd",
+      "name": "DNS Filter - Get Organizations",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "5TmbpXZrc0jlE6GZ",
+          "name": "Huntress API (Account-wide)"
+        },
+        "httpHeaderAuth": {
+          "id": "16ppgwd8trUxPrz7",
+          "name": "DNS Filter API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// DNS Filter wraps in a data array\nconst orgs = $input.all()[0].json.data;\n\n// Transform to standard format\nreturn orgs.map(org => ({\n  json: {\n    platform: 'DNS Filter',\n    id: org.id,\n    name: org.attributes.name\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        -496
+      ],
+      "id": "f2045b34-d680-4723-bd0f-9d413f10ed22",
+      "name": "Extract DNS Filter Orgs"
+    },
+    {
+      "parameters": {
+        "numberInputs": 5
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -576,
+        -128
+      ],
+      "id": "03b1ee80-53a3-4f1b-88d3-79b5fe001f91",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all items\nconst items = $input.all();\n\n// Simple string similarity function (Levenshtein-based)\nfunction similarity(s1, s2) {\n  const longer = s1.length > s2.length ? s1 : s2;\n  const shorter = s1.length > s2.length ? s2 : s1;\n  \n  if (longer.length === 0) return 1.0;\n  \n  const editDistance = levenshteinDistance(longer, shorter);\n  return (longer.length - editDistance) / longer.length;\n}\n\nfunction levenshteinDistance(s1, s2) {\n  const costs = [];\n  for (let i = 0; i <= s1.length; i++) {\n    let lastValue = i;\n    for (let j = 0; j <= s2.length; j++) {\n      if (i === 0) {\n        costs[j] = j;\n      } else if (j > 0) {\n        let newValue = costs[j - 1];\n        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {\n          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;\n        }\n        costs[j - 1] = lastValue;\n        lastValue = newValue;\n      }\n    }\n    if (i > 0) costs[s2.length] = lastValue;\n  }\n  return costs[s2.length];\n}\n\n// Normalize names for better matching\nfunction normalizeName(name) {\n  return name\n    .toLowerCase()\n    .replace(/[^\\w\\s]/g, '') // Remove punctuation\n    .replace(/\\s+/g, ' ')    // Normalize whitespace\n    .trim();\n}\n\n// Group by similar names\nconst groups = {};\nconst threshold = 0.85; // 85% similarity required\n\nitems.forEach(item => {\n  const normalizedName = normalizeName(item.json.name);\n  let matched = false;\n  \n  // Try to match with existing groups\n  for (const groupKey in groups) {\n    const groupNormalizedName = normalizeName(groupKey);\n    const score = similarity(normalizedName, groupNormalizedName);\n    \n    if (score >= threshold) {\n      // Add to existing group\n      groups[groupKey].items.push(item.json);\n      matched = true;\n      break;\n    }\n  }\n  \n  // If no match, create new group\n  if (!matched) {\n    groups[item.json.name] = {\n      canonicalName: item.json.name,\n      items: [item.json]\n    };\n  }\n});\n\n// Transform groups into output format\nconst results = Object.values(groups).map(group => {\n  const platformData = {};\n  \n  group.items.forEach(item => {\n    platformData[item.platform] = item.id;\n  });\n  \n  return {\n    json: {\n      name: group.canonicalName,\n      platforms: Object.keys(platformData),\n      platformCount: Object.keys(platformData).length,\n      ...platformData\n    }\n  };\n});\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        -80
+      ],
+      "id": "6677a0c1-1131-497a-b45f-56a2bae2ea1b",
+      "name": "Fuzzy Match Organizations"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Sort by platform count (most platforms first)\nconst sorted = items.sort((a, b) => b.json.platformCount - a.json.platformCount);\n\n// Build HTML table\nlet html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; margin: 20px; }\n    table { border-collapse: collapse; width: 100%; }\n    th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }\n    th { background-color: #4CAF50; color: white; }\n    tr:nth-child(even) { background-color: #f2f2f2; }\n    .full-match { background-color: #d4edda; }\n    .partial-match { background-color: #fff3cd; }\n    .single-platform { background-color: #f8d7da; }\n  </style>\n</head>\n<body>\n  <h1>Platform Organization Comparison</h1>\n  <p>Total unique organizations: ${items.length}</p>\n  <table>\n    <thead>\n      <tr>\n        <th>Company Name</th>\n        <th>Platforms</th>\n        <th>Count</th>\n        <th>SuperOps ID</th>\n        <th>Hudu ID</th>\n        <th>NinjaOne ID</th>\n        <th>Huntress ID</th>\n        <th>DNS Filter ID</th>\n      </tr>\n    </thead>\n    <tbody>\n`;\n\nsorted.forEach(item => {\n  const rowClass = \n    item.json.platformCount === 5 ? 'full-match' :\n    item.json.platformCount > 1 ? 'partial-match' :\n    'single-platform';\n  \n  html += `\n      <tr class=\"${rowClass}\">\n        <td>${item.json.name}</td>\n        <td>${item.json.platforms.join(', ')}</td>\n        <td>${item.json.platformCount}</td>\n        <td>${item.json.SuperOps || '-'}</td>\n        <td>${item.json.Hudu || '-'}</td>\n        <td>${item.json.NinjaOne || '-'}</td>\n        <td>${item.json.Huntress || '-'}</td>\n        <td>${item.json['DNS Filter'] || '-'}</td>\n      </tr>\n  `;\n});\n\nhtml += `\n    </tbody>\n  </table>\n</body>\n</html>\n`;\n\nreturn [{\n  json: { html },\n  binary: {\n    data: {\n      data: Buffer.from(html).toString('base64'),\n      mimeType: 'text/html',\n      fileName: 'platform-comparison.html'\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        32
+      ],
+      "id": "a095ea09-4867-4b17-bdd7-78acc6e7304c",
+      "name": "Format as HTML Table"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Sort by platform count (most platforms first)\nconst sorted = items.sort((a, b) => b.json.platformCount - a.json.platformCount);\n\n// CSV header\nlet csv = 'Company Name,Platforms,Platform Count,SuperOps ID,Hudu ID,NinjaOne ID,Huntress ID,DNS Filter ID\\n';\n\n// CSV rows\nsorted.forEach(item => {\n  const row = [\n    `\"${item.json.name}\"`,\n    `\"${item.json.platforms.join(', ')}\"`,\n    item.json.platformCount,\n    item.json.SuperOps || '',\n    item.json.Hudu || '',\n    item.json.NinjaOne || '',\n    item.json.Huntress || '',\n    item.json['DNS Filter'] || ''\n  ];\n  \n  csv += row.join(',') + '\\n';\n});\n\nreturn [{\n  json: { \n    csv,\n    rowCount: items.length \n  },\n  binary: {\n    data: {\n      data: Buffer.from(csv).toString('base64'),\n      mimeType: 'text/csv',\n      fileName: 'platform-comparison.csv'\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        -192
+      ],
+      "id": "860c689e-101c-4eeb-88fd-815dfc4c9c7c",
+      "name": "Format as CSV"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "SuperOps - Get Clients",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Hudu - Get Companies",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Huntress - Get Organizations",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DNS Filter - Get Organizations",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "NinjaOne - Get Organizations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract SuperOps Clients": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Hudu - Get Companies": {
+      "main": [
+        [
+          {
+            "node": "Extract Hudu Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SuperOps - Get Clients": {
+      "main": [
+        [
+          {
+            "node": "Extract SuperOps Clients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NinjaOne - Get Organizations": {
+      "main": [
+        [
+          {
+            "node": "Extract NinjaOne Orgs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Huntress - Get Organizations": {
+      "main": [
+        [
+          {
+            "node": "Extract Huntress Orgs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DNS Filter - Get Organizations": {
+      "main": [
+        [
+          {
+            "node": "Extract DNS Filter Orgs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract DNS Filter Orgs": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Hudu Companies": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Extract Huntress Orgs": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Extract NinjaOne Orgs": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Fuzzy Match Organizations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fuzzy Match Organizations": {
+      "main": [
+        [
+          {
+            "node": "Format as HTML Table",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format as CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3ba50bff-3d1b-4c1f-bb04-62befaed7c98",
+  "meta": {
+    "instanceId": "42cdc0c0b4e9986d3979d17198216165cc53f620822eb06d9e7ebb8e38f0a37f"
+  },
+  "id": "0NEs2klchbOvVpn5",
+  "tags": []
+}
