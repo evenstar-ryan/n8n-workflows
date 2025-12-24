@@ -1,0 +1,443 @@
+{O
+  "name": "NinjaOne Webhook Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ninjaone-alerts",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        2624,
+        1232
+      ],
+      "webhookId": "ninjaone-webhook",
+      "id": "6e934bf6-9755-4a99-af07-a04dae16b799"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.query.token }}",
+              "value2": "=d01175a75245b14e12e09fca7f1bdd6161aa8d4d3cd59c09485044165e231ba4"
+            }
+          ]
+        }
+      },
+      "name": "Validate Token",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2832,
+        1232
+      ],
+      "id": "87b7d392-2593-4814-8726-4baff277e4a9"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"error\": \"Unauthorized\", \"message\": \"Invalid token\" } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "name": "Return 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        3024,
+        1360
+      ],
+      "id": "99a663c5-8935-46d9-8b5e-698b73ff3c46"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse NinjaOne webhook payload\nconst payload = $input.item.json.body;\n\nreturn {\n  json: {\n    ninjaone_org_id: String(payload.organizationId),\n    device_name: payload.deviceName || 'Unknown Device',\n    device_id: payload.deviceId,\n    alert_id: payload.id,\n    severity: payload.statusCode || 'UNKNOWN',\n    status: payload.status,\n    message: payload.message,\n    timestamp: new Date(payload.activityTime * 1000).toISOString(),\n    raw_payload: payload\n  }\n};"
+      },
+      "name": "Parse Webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3024,
+        1104
+      ],
+      "id": "9dd45c18-b855-4da1-8cd0-59348d7c4035"
+    },
+    {
+      "parameters": {
+        "url": "=https://evenstar.huducloud.com/api/v1/assets?asset_layout_id=26&page_size=250",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "name": "GET Integration Identifiers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3248,
+        1232
+      ],
+      "id": "a0596dca-9267-46f4-8162-cff9d7d05a5d",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o5FyDdc2nqruRrkR",
+          "name": "Hudu API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find matching Hudu Integration Identifier by NinjaOne Org ID\nconst ninjaoneOrgId = $input.item.json.ninjaone_org_id;\n\n// Get assets array from merged data\nconst assets = $input.item.json.assets || [];\n\n// If assets is empty, return error\nif (assets.length === 0) {\n  return {\n    json: {\n      error: 'no_hudu_mapping',\n      message: `No Integration Identifier assets found`,\n      ninjaone_org_id: ninjaoneOrgId,\n      device_name: $input.item.json.device_name,\n      alert_id: $input.item.json.alert_id\n    }\n  };\n}\n\n// Search for asset with matching NinjaOne Org ID in custom fields\nconst matchingAsset = assets.find(asset => {\n  const fields = asset.fields || [];\n  const ninjaField = fields.find(f => f.label === 'NinjaOne Org ID');\n  return ninjaField && String(ninjaField.value) === String(ninjaoneOrgId);\n});\n\nif (!matchingAsset) {\n  return {\n    json: {\n      error: 'no_hudu_mapping',\n      message: `No Hudu Integration Identifier found for NinjaOne Org ID: ${ninjaoneOrgId}`,\n      ninjaone_org_id: ninjaoneOrgId,\n      device_name: $input.item.json.device_name,\n      alert_id: $input.item.json.alert_id\n    }\n  };\n}\n\n// Extract SuperOps Client ID from custom fields\nconst superopsField = matchingAsset.fields.find(f => f.label === 'SuperOps Client ID');\nconst superopsId = superopsField ? superopsField.value : null;\n\nreturn {\n  json: {\n    hudu_company_id: matchingAsset.company_id,\n    hudu_company_name: matchingAsset.company_name,\n    superops_id: superopsId,\n    ninjaone_org_id: ninjaoneOrgId,\n    device_name: $input.item.json.device_name,\n    device_id: $input.item.json.device_id,\n    alert_id: $input.item.json.alert_id,\n    severity: $input.item.json.severity,\n    status: $input.item.json.status,\n    message: $input.item.json.message,\n    timestamp: $input.item.json.timestamp\n  }\n};"
+      },
+      "name": "Find SuperOps ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3632,
+        1104
+      ],
+      "id": "412c2c30-f759-408f-be1a-3d263620060b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.error }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Check Mapping Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3840,
+        1104
+      ],
+      "id": "640e047c-4e90-4844-95fa-2acf884c1200"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log error - no Hudu mapping found\nconst error = $input.item.json;\n\nconsole.error('NinjaOne Webhook Error: No Hudu mapping found');\nconsole.error(`NinjaOne Org ID: ${error.ninjaone_org_id}`);\nconsole.error(`Device: ${error.device_name}`);\nconsole.error(`Alert ID: ${error.alert_id}`);\n\n// TODO: Send to Slack/email notification\n\nreturn {\n  json: {\n    status: 'error_logged',\n    error: error.error,\n    message: error.message\n  }\n};"
+      },
+      "name": "Log Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        1232
+      ],
+      "id": "5531a206-89a9-4090-acba-57a0b54ead09"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"accepted\", \"message\": \"Alert received but no mapping found\", \"alert_id\": $json.alert_id } }}",
+        "options": {}
+      },
+      "name": "Return 200 (No Mapping)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        4224,
+        1232
+      ],
+      "id": "a6ce926f-90bb-4fa7-8509-a49fae84c85d"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.superops_id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Has SuperOps ID?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        4032,
+        976
+      ],
+      "id": "5405201f-8e92-4934-a6a0-f86730726a1b"
+    },
+    {
+      "parameters": {
+        "jsCode": "const severity = $json.severity || 'UNKNOWN';\nconst deviceName = $json.device_name || 'Unknown Device';\nconst status = $json.status || 'Unknown';\nconst message = $json.message || 'No message provided';\nconst timestamp = $json.timestamp || new Date().toISOString();\nconst alertId = $json.alert_id || 'N/A';\nconst ninjaoneOrgId = $json.ninjaone_org_id || 'N/A';\nconst deviceId = $json.device_id || 'N/A';\n\nconst priorityMap = {\n  'CRITICAL': 'HIGH',\n  'HIGH': 'HIGH',\n  'MEDIUM': 'MEDIUM',\n  'LOW': 'LOW',\n  'UNKNOWN': 'MEDIUM'\n};\n\nconst priority = priorityMap[severity] || 'MEDIUM';\nconst subject = `[${severity}] ${deviceName}: ${status}`;\n\nconst description = `\n<strong>🚨 NinjaOne Alert</strong><br>\n<br>\n<strong>Device:</strong> ${deviceName}<br>\n<strong>Severity:</strong> ${severity}<br>\n<strong>Status:</strong> ${status}<br>\n<strong>Time:</strong> ${timestamp}<br>\n<br>\n<strong>Message:</strong><br>\n${message}<br>\n<br>\n<hr>\n<small>\n<strong>Alert ID:</strong> ${alertId}<br>\n<strong>NinjaOne Org ID:</strong> ${ninjaoneOrgId}<br>\n<strong>Device ID:</strong> ${deviceId}\n</small>\n`;\n\nreturn {\n  json: {\n    superops_id: $json.superops_id,\n    subject: subject,\n    description: description,\n    priority: priority,\n    severity: severity,\n    device_name: deviceName,\n    alert_id: alertId\n  }\n};"
+      },
+      "name": "Build Ticket Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4224,
+        864
+      ],
+      "id": "c5263c7f-df19-4c68-9bd6-f2dc19e62e3c"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.superops.ai/msp",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpMultipleHeadersAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "CREATE SuperOps Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4592,
+        864
+      ],
+      "id": "03909f0b-ada8-4d03-8a50-04f322575dd4",
+      "credentials": {
+        "httpMultipleHeadersAuth": {
+          "id": "RYdTfhQ1HuM69KDA",
+          "name": "SuperOps MSP API Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"success\", \"ticket_id\": $json.data.createTicket.ticketId, \"display_id\": $json.data.createTicket.displayId, \"alert_id\": $('Build Ticket Data').item.json.alert_id } }}",
+        "options": {}
+      },
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        4800,
+        864
+      ],
+      "id": "9afd83fd-4009-486f-9aa7-cc2b06e28ef2"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"accepted\", \"message\": \"Former client - no SuperOps ticket created\", \"alert_id\": $json.alert_id } }}",
+        "options": {}
+      },
+      "name": "Return 200 (Former Client)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        4224,
+        1088
+      ],
+      "id": "04c7a3fd-b710-4107-9b04-919f7c2cc303"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3440,
+        1088
+      ],
+      "id": "35078ec7-d073-41cf-8e6f-a82c8cf86d2a",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Escape function for GraphQL strings\nfunction escapeGraphQL(str) {\n  if (!str) return '';\n  return str\n    .replace(/\\\\/g, '\\\\\\\\')   // Escape backslashes\n    .replace(/\"/g, '\\\\\"')      // Escape quotes\n    .replace(/\\n/g, '\\\\n')     // Escape newlines\n    .replace(/\\r/g, '\\\\r')     // Escape carriage returns\n    .replace(/\\t/g, '\\\\t');    // Escape tabs\n}\n\nconst accountId = $json.superops_id;\nconst subject = escapeGraphQL($json.subject);\nconst description = escapeGraphQL($json.description);\nconst priority = $json.priority; // Already a string: HIGH, MEDIUM, or LOW\n\nconst graphqlQuery = `mutation { createTicket(input: { client: { accountId: \"${accountId}\" }, subject: \"${subject}\", description: \"${description}\", ticketType: \"INCIDENT\", source: INTEGRATION, priority: \"${priority}\", status: \"OPEN\", category: \"Hardware\", subcategory: \"Server\" }) { ticketId displayId subject status } }`;\n\nreturn {\n  json: {\n    query: graphqlQuery\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4416,
+        864
+      ],
+      "id": "88b2af4a-7b72-483b-94dd-20f242f70b12",
+      "name": "Build GraphQL Request"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Token": {
+      "main": [
+        [
+          {
+            "node": "Parse Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Webhook": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GET Integration Identifiers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Integration Identifiers": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Find SuperOps ID": {
+      "main": [
+        [
+          {
+            "node": "Check Mapping Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Mapping Exists": {
+      "main": [
+        [
+          {
+            "node": "Has SuperOps ID?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error": {
+      "main": [
+        [
+          {
+            "node": "Return 200 (No Mapping)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has SuperOps ID?": {
+      "main": [
+        [
+          {
+            "node": "Build Ticket Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return 200 (Former Client)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Ticket Data": {
+      "main": [
+        [
+          {
+            "node": "Build GraphQL Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CREATE SuperOps Ticket": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Find SuperOps ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build GraphQL Request": {
+      "main": [
+        [
+          {
+            "node": "CREATE SuperOps Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "557a8c9e-eaf0-4993-aa5b-06b4ef02fd14",
+  "meta": {
+    "instanceId": "42cdc0c0b4e9986d3979d17198216165cc53f620822eb06d9e7ebb8e38f0a37f"
+  },
+  "id": "JopVY782iweEXbXh",
+  "tags": []
+}
