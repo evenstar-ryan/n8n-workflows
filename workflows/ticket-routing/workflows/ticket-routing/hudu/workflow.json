@@ -1,0 +1,472 @@
+{
+  "name": "Hudu Expirations Webhook Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hudu-expirations",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -640,
+        16
+      ],
+      "id": "bfd11f74-52ff-44cd-a6ad-bcce0424b69a",
+      "name": "Webhook",
+      "webhookId": "800db75e-1a0e-4108-8a11-a51ed32e94e4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7c06cf40-ce10-44b5-bfe0-c1b2abf17603",
+              "leftValue": "={{ $json.query.token }}",
+              "rightValue": "657864970f6659b676531a334dce9fa2ec3ac22f759e8af2a32d097e720c1507",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -432,
+        16
+      ],
+      "id": "6a0e6954-21a0-4ca8-9465-3172c3867744",
+      "name": "Validate Token"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n     \"error\": \"Invalid token\"\n   }",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -224,
+        112
+      ],
+      "id": "38c1a725-2193-426d-8bb0-647f099c20b1",
+      "name": "Return 401 Unauthorized"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract Hudu expiration webhook data\nconst companyId = $json.body.company_id || $json.query.company_id || null;\nconst companyName = $json.body.company_name || $json.query.company_name || 'Unknown Company';\nconst expirationType = $json.body.expiration_type || $json.query.expiration_type || 'unknown';\nconst recordName = $json.body.record_name || $json.query.record_name || 'Unknown Record';\nconst expirationDate = $json.body.expiration_date || $json.query.expiration_date || null;\nconst triggerDays = $json.body.trigger_days || $json.query.trigger_days || '30';\nconst huduUrl = $json.body.hudu_url || $json.query.hudu_url || null;\nconst recordId = $json.body.record_id || $json.query.record_id || null;\n\nreturn {\n  json: {\n    hudu_company_id: companyId,\n    company_name: companyName,\n    expiration_type: expirationType,\n    record_name: recordName,\n    expiration_date: expirationDate,\n    trigger_days: triggerDays,\n    hudu_url: huduUrl,\n    record_id: recordId\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        -80
+      ],
+      "id": "b4736842-f44e-4f76-8264-c7dcf8e0bb28",
+      "name": "Parse Expiration Data"
+    },
+    {
+      "parameters": {
+        "url": "=https://evenstar.huducloud.com/api/v1/assets?asset_layout_id=26&company_id={{ $json.hudu_company_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        32,
+        16
+      ],
+      "id": "44af489d-3f44-4979-b2a4-44cd945ddb90",
+      "name": "GET Integration Identifiers",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o5FyDdc2nqruRrkR",
+          "name": "Hudu API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract SuperOps Client ID from Integration Identifier\nconst assets = $json.assets || [];\nconst huduCompanyId = $input.item.json.hudu_company_id;\nconst companyName = $input.item.json.company_name;\n\n// Find Integration Identifier asset (should only be one per company)\nconst integrationAsset = assets.find(asset => \n  asset.asset_layout_id === 26\n);\n\nif (!integrationAsset) {\n  return {\n    json: {\n      ...item.json,\n      mapping_found: false,\n      superops_id: null,\n      error: `No Integration Identifier found for company ID ${huduCompanyId}`\n    }\n  };\n}\n\n// Find SuperOps Client ID field\nconst fields = integrationAsset.fields || [];\nconst superopsField = fields.find(f => \n  f.label === 'SuperOps Client ID'\n);\n\nconst superopsId = superopsField?.value || null;\n\nreturn {\n  json: {\n    hudu_company_id: huduCompanyId,\n    company_name: companyName,\n    expiration_type: $input.item.json.expiration_type,\n    record_name: $input.item.json.record_name,\n    expiration_date: $input.item.json.expiration_date,\n    trigger_days: $input.item.json.trigger_days,\n    hudu_url: $input.item.json.hudu_url,\n    record_id: $input.item.json.record_id,\n    superops_id: superopsId,\n    mapping_found: !!superopsId\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -96
+      ],
+      "id": "096f66dd-c0f6-40e3-aa1e-b3c45d5d8d8b",
+      "name": "Find SuperOps ID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8e93fc17-90c2-4b90-849d-181d60f3c3d3",
+              "leftValue": "={{ $json.mapping_found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        640,
+        -96
+      ],
+      "id": "b1017378-ed31-4494-b28d-fd6996b68f19",
+      "name": "Check Mapping Exists"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n     \"success\": false,\n     \"reason\": \"No SuperOps mapping found for this company\"\n   }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        848,
+        0
+      ],
+      "id": "869908b3-f2d3-4a65-9097-ba4f59c488f5",
+      "name": "Return 200 (No Mapping)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "31ca7b6b-c223-45db-b59f-bd886d648d06",
+              "leftValue": "={{ $json.superops_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        848,
+        -192
+      ],
+      "id": "c36f8bc3-88f9-4c0f-8dab-0218bae8c19d",
+      "name": "Has SuperOps ID?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n     \"success\": true,\n     \"reason\": \"Former client - no ticket created\"\n   }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1056,
+        -96
+      ],
+      "id": "ad26c439-946c-4971-95bb-3ade03255429",
+      "name": "Return 200 (Former Client)",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map expiration type to user-friendly labels and SuperOps categories\nconst expirationTypeMap = {\n  'domain': {\n    label: 'Domain Registration',\n    subcategory: 'Domain Expiration'\n  },\n  'ssl_certificate': {\n    label: 'SSL Certificate',\n    subcategory: 'SSL Expiration'\n  },\n  'warranty': {\n    label: 'Warranty',\n    subcategory: 'Warranty Expiration'\n  },\n  'asset_field': {\n    label: 'Asset Expiration',\n    subcategory: 'Other'\n  },\n  'unknown': {\n    label: 'Unknown Expiration',\n    subcategory: 'Other'\n  }\n};\n\nconst expirationType = $json.expiration_type || 'unknown';\nconst typeConfig = expirationTypeMap[expirationType] || expirationTypeMap['unknown'];\nconst typeLabel = typeConfig.label;\nconst subcategory = typeConfig.subcategory;\n\nconst recordName = $json.record_name || 'Unknown';\nconst expirationDate = $json.expiration_date || 'Unknown Date';\nconst triggerDays = $json.trigger_days || '30';\nconst companyName = $json.company_name || 'Unknown Company';\nconst huduUrl = $json.hudu_url || '';\n\n// Determine priority based on days until expiration\nlet priority = 'MEDIUM';\nconst daysNum = parseInt(triggerDays);\nif (daysNum <= 7) {\n  priority = 'HIGH';\n} else if (daysNum <= 14) {\n  priority = 'MEDIUM';\n} else {\n  priority = 'LOW';\n}\n\n// Build subject\nconst subject = `[EXPIRATION] ${typeLabel}: ${recordName} (${triggerDays} days)`;\n\n// Build HTML description\nconst description = `\n<strong>🗓️ Hudu Expiration Alert</strong><br>\n<br>\n<strong>Type:</strong> ${typeLabel}<br>\n<strong>Item:</strong> ${recordName}<br>\n<strong>Expires:</strong> ${expirationDate}<br>\n<strong>Days Remaining:</strong> ${triggerDays}<br>\n<strong>Company:</strong> ${companyName}<br>\n<br>\n<strong>Action Required:</strong><br>\nReview and renew before expiration date.<br>\n<br>\n<hr>\n<small>\n<strong>Hudu Link:</strong> <a href=\"${huduUrl}\">${huduUrl}</a><br>\n<strong>Record ID:</strong> ${$json.record_id || 'N/A'}<br>\n<strong>Hudu Company ID:</strong> ${$json.hudu_company_id || 'N/A'}\n</small>\n`;\n\nreturn {\n  json: {\n    superops_id: $json.superops_id,\n    subject: subject,\n    description: description,\n    priority: priority,\n    category: 'Expiration',\n    subcategory: subcategory,\n    expiration_type: expirationType,\n    record_name: recordName,\n    expiration_date: expirationDate,\n    trigger_days: triggerDays\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        -288
+      ],
+      "id": "265ef29a-ceeb-4036-b466-410ba6443ce4",
+      "name": "Build Ticket Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Escape function for GraphQL strings\nfunction escapeGraphQL(str) {\n  if (!str) return '';\n  return str\n    .replace(/\\\\/g, '\\\\\\\\')\n    .replace(/\"/g, '\\\\\"')\n    .replace(/\\n/g, '\\\\n')\n    .replace(/\\r/g, '\\\\r')\n    .replace(/\\t/g, '\\\\t');\n}\n\nconst accountId = $json.superops_id;\nconst subject = escapeGraphQL($json.subject);\nconst description = escapeGraphQL($json.description);\nconst priority = $json.priority;\nconst category = $json.category;\nconst subcategory = $json.subcategory;\n\nconst graphqlQuery = `mutation { createTicket(input: { client: { accountId: \"${accountId}\" }, subject: \"${subject}\", description: \"${description}\", ticketType: \"INCIDENT\", source: INTEGRATION, priority: \"${priority}\", status: \"OPEN\", category: \"${category}\", subcategory: \"${subcategory}\" }) { ticketId displayId subject status } }`;\n\nreturn {\n  json: {\n    query: graphqlQuery\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        -288
+      ],
+      "id": "a2858222-65a5-4243-bfe6-4d4eeaac7ad5",
+      "name": "Build GraphQLRequest"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.superops.ai/msp",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpMultipleHeadersAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1472,
+        -288
+      ],
+      "id": "ae07f1da-580b-4949-a4d5-8e93bd320584",
+      "name": "Create SuperOps Ticket",
+      "credentials": {
+        "httpMultipleHeadersAuth": {
+          "id": "RYdTfhQ1HuM69KDA",
+          "name": "SuperOps MSP API Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"success\": true,\n  \"message\": \"Expiration ticket created successfully\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1680,
+        -288
+      ],
+      "id": "387c1a3a-d0ee-424a-97a9-dfe41a4035f3",
+      "name": "Return Success"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        256,
+        -96
+      ],
+      "id": "025d55be-7be5-41bf-b603-e7b4d1838d51",
+      "name": "Merge"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Token": {
+      "main": [
+        [
+          {
+            "node": "Parse Expiration Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return 401 Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Expiration Data": {
+      "main": [
+        [
+          {
+            "node": "GET Integration Identifiers",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Integration Identifiers": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Find SuperOps ID": {
+      "main": [
+        [
+          {
+            "node": "Check Mapping Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Mapping Exists": {
+      "main": [
+        [
+          {
+            "node": "Has SuperOps ID?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return 200 (No Mapping)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has SuperOps ID?": {
+      "main": [
+        [
+          {
+            "node": "Build Ticket Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return 200 (Former Client)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Ticket Data": {
+      "main": [
+        [
+          {
+            "node": "Build GraphQLRequest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build GraphQLRequest": {
+      "main": [
+        [
+          {
+            "node": "Create SuperOps Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create SuperOps Ticket": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Find SuperOps ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timeSavedMode": "fixed",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "71438b25-8d5d-4c87-b405-ed343d93e479",
+  "meta": {
+    "instanceId": "42cdc0c0b4e9986d3979d17198216165cc53f620822eb06d9e7ebb8e38f0a37f"
+  },
+  "id": "M6CGOyD7ACOYqdI3",
+  "tags": []
+}
